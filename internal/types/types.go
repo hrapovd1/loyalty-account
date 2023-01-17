@@ -1,33 +1,27 @@
 package types
 
-type UserModel struct {
-	ID        uint `gorm:"primaryKey"`
-	Login     string
-	Password  string
-	Account   AccountModel `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
-	Orders    []OrderModel `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
-	OrderLogs []OrderLogModel
+import "github.com/golang-jwt/jwt/v4"
+
+type Config struct {
+	AppAddress     string
+	DatabaseDSN    string
+	AccrualAddress string
 }
 
-type AccountModel struct {
-	ID          uint64 `gorm:"primaryKey"`
-	UserModelID uint
-	Balance     float64
+type DBModeler interface {
+	Read() uint
 }
 
-type OrderModel struct {
-	ID          uint64 `gorm:"primaryKey"`
-	UserModelID uint
-	Number      uint64
-	Status      string
-	Accrual     float64
-	UploadedAt  int64 `gorm:"autoCreateTime"`
+type Claims struct {
+	Login string `json:"login"`
+	jwt.RegisteredClaims
 }
 
-type OrderLogModel struct {
-	ID          uint64 `gorm:"primaryKey"`
-	UserModelID uint
-	OrderNumber uint64
-	Sum         float64
-	ProcessedAt int64 `gorm:"autoCreateTime"`
+type LoginResponse struct {
+	Auth_token string `json:"auth_token"`
+}
+
+type Balance struct {
+	Balance float64 `json:"current"`
+	Summ    float64 `json:"withdrawn"`
 }
