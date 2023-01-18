@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/hrapovd1/loyalty-account/internal/config"
 	"github.com/hrapovd1/loyalty-account/internal/dbstorage"
 	"github.com/hrapovd1/loyalty-account/internal/handlers"
+	"github.com/hrapovd1/loyalty-account/internal/usecase"
 )
 
 func main() {
@@ -23,12 +25,18 @@ func main() {
 	// Настройка подключения к БД и создание приложения.
 	app, err := handlers.NewAppHandler(*appConf, logger)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalln(err)
 	}
 	defer app.DB.Close()
 	if err := dbstorage.InitDB(app.DB); err != nil {
 		logger.Fatalln(err)
 	}
+
+	// Запуск диспетчера системы расчета баллов
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go usecase.Dispatcher(ctx, app.DB, logger, appConf.AccrualAddress)
 
 	// Публикация API
 	router := chi.NewRouter()

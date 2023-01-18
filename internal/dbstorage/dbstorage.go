@@ -3,6 +3,7 @@ package dbstorage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 
 	"github.com/hrapovd1/loyalty-account/internal/models"
@@ -24,7 +25,7 @@ func InitDB(pdb *sql.DB) error {
 	)
 }
 
-func Save(ctx context.Context, pdb *sql.DB, dbmodel types.DBModeler) error {
+func CreateUser(ctx context.Context, pdb *sql.DB, user models.User) error {
 	select {
 	case <-ctx.Done():
 		return nil
@@ -33,11 +34,14 @@ func Save(ctx context.Context, pdb *sql.DB, dbmodel types.DBModeler) error {
 		if err != nil {
 			return err
 		}
-		log.Println(dbmodel)
-		user := dbmodel.(models.User)
+		log.Println(user)
 
 		err = db.Create(&user).Error
-		return err
+		if err != nil {
+			return err
+		}
+		// Bonus for new user :)
+		return IncreaceBalance(ctx, pdb, user.Login, float64(500))
 	}
 }
 
@@ -76,14 +80,11 @@ func GetOrders(ctx context.Context, pdb *sql.DB, login string) (*[]models.Order,
 	}
 }
 
-func CreateOrder(ctx context.Context, pdb *sql.DB, login string, number uint64) error {
+func CreateOrder(ctx context.Context, pdb *sql.DB, login string, order models.Order) error {
 	select {
 	case <-ctx.Done():
 		return nil
 	default:
-		order := models.Order{
-			Number: number,
-		}
 		user, err := GetUser(ctx, pdb, login)
 		if err != nil {
 			return err
@@ -142,11 +143,113 @@ func GetOrderLogs(ctx context.Context, pdb *sql.DB, login string) (*[]models.Ord
 	}
 }
 
-func WithdrawnOrder(ctx context.Context, pdb *sql.DB, login string, orderLog models.OrderLog) error {
+func WithdrawOrder(ctx context.Context, pdb *sql.DB, login string, orderLog models.OrderLog) error {
 	select {
 	case <-ctx.Done():
 		return nil
 	default:
+		if orderLog.Sum <= 0 {
+			return fmt.Errorf("sum must be >0")
+		}
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		if err != nil {
+			return err
+		}
+		// transaction start
+		return db.Transaction(
+			func(tx *gorm.DB) error {
+				var user models.User
+				if err = db.First(&user, "login = ?", login).Error; err != nil {
+					return err
+				}
+				// compare balance to sum
+				balance := models.Account{UserID: user.ID}
+				if err = tx.Select("balance").Find(&balance).Error; err != nil {
+					return err
+				}
+				if balance.Balance.Float64 < orderLog.Sum {
+					return fmt.Errorf("not enough funds")
+				}
+				// balance - sum
+				if err = tx.Model(&models.Account{}).Where(
+					"user_id = (?)", user.ID,
+				).UpdateColumn("balance", gorm.Expr("balance - ?", orderLog.Sum)).Error; err != nil {
+					return err
+				}
+				// write orderLog entry
+				orderLog.UserID = user.ID
+				return tx.Create(&orderLog).Error
+			},
+		)
+		// transaction end
 	}
-	return nil
+}
+
+func IncreaceBalance(ctx context.Context, pdb *sql.DB, login string, sum float64) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+		if sum <= 0 {
+			return fmt.Errorf("sum must be >0")
+		}
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		if err != nil {
+			return err
+		}
+		var user models.User
+		if err = db.First(&user, "login = ?", login).Error; err != nil {
+			return err
+		}
+		return db.Model(&models.Account{}).Where(
+			"user_id = (?)", user.ID,
+		).UpdateColumn("balance", gorm.Expr("balance + ?", sum)).Error
+	}
+}
+
+func DispatchGetOrders(ctx context.Context, pdb *sql.DB, status string) (*[]string, error) {
+	numList := make([]string, 0)
+	select {
+	case <-ctx.Done():
+		return &numList, nil
+	default:
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		if err != nil {
+			return &numList, err
+		}
+
+		rows, err := db.Model(&models.Order{}).Select("number").Where("status = ?", status).Rows()
+		defer rows.Close()
+		if err != nil {
+			return &numList, err
+		}
+		for rows.Next() {
+			var number string
+			if err = rows.Scan(&number); err != nil {
+				return &numList, err
+			}
+			numList = append(numList, number)
+		}
+		if err = rows.Err(); err != nil {
+			return &numList, err
+		}
+		return &numList, nil
+	}
+}
+
+func DispatchUpdateOrder(ctx context.Context, pdb *sql.DB, order models.Order) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		if err != nil {
+			return err
+		}
+		return db.Model(&models.Order{}).Where(
+			"number = ?", order.Number,
+		).Updates(
+			models.Order{Status: order.Status, Accrual: order.Accrual},
+		).Error
+	}
 }

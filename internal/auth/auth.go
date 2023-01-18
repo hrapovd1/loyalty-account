@@ -26,7 +26,7 @@ func CreateUser(ctx context.Context, db *sql.DB, user models.User) error {
 	pwdHash.Write([]byte(hashSalt))
 	user.Password = fmt.Sprintf("%x", pwdHash.Sum(nil))
 
-	return dbstorage.Save(ctx, db, user)
+	return dbstorage.CreateUser(ctx, db, user)
 }
 
 func GetToken(ctx context.Context, db *sql.DB, user models.User) (string, error) {

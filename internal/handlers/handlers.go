@@ -7,13 +7,13 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/hrapovd1/loyalty-account/internal/auth"
 	"github.com/hrapovd1/loyalty-account/internal/config"
 	"github.com/hrapovd1/loyalty-account/internal/dbstorage"
 	"github.com/hrapovd1/loyalty-account/internal/models"
 	"github.com/hrapovd1/loyalty-account/internal/types"
+	"github.com/hrapovd1/loyalty-account/internal/usecase"
 )
 
 type AppHandler struct {
@@ -164,19 +164,14 @@ func (app *AppHandler) PostOrders(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orderNumber, err := strconv.Atoi(string(body))
-	if err != nil {
-		http.Error(rw, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
 	// TODO: orderNumber validator
 
-	if err := dbstorage.CreateOrder(ctx, app.DB, login[0], uint64(orderNumber)); err != nil {
+	if err := usecase.SaveOrder(ctx, app.DB, login[0], string(body)); err != nil {
 		// TODO: return and answer different errors.
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rw.WriteHeader(http.StatusOK)
+	rw.WriteHeader(http.StatusAccepted)
 	_, err = rw.Write([]byte(""))
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -234,6 +229,19 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 
 	var orderLog models.OrderLog
 	if err := json.Unmarshal(body, &orderLog); err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = dbstorage.WithdrawOrder(ctx, app.DB, login[0], orderLog); err != nil {
+		// TODO: return and answer different errors.
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusOK)
+	_, err = rw.Write([]byte(""))
+	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}

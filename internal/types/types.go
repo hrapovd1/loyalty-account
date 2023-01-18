@@ -8,10 +8,6 @@ type Config struct {
 	AccrualAddress string
 }
 
-type DBModeler interface {
-	Read() uint
-}
-
 type Claims struct {
 	Login string `json:"login"`
 	jwt.RegisteredClaims
@@ -24,4 +20,10 @@ type LoginResponse struct {
 type Balance struct {
 	Balance float64 `json:"current"`
 	Summ    float64 `json:"withdrawn"`
+}
+
+type AccrualAnswer struct {
+	OrderNumber string  `json:"order"`
+	Status      string  `json:"status"`
+	Accrual     float64 `json:"accrual"`
 }
