@@ -246,10 +246,32 @@ func DispatchUpdateOrder(ctx context.Context, pdb *sql.DB, order models.Order) e
 		if err != nil {
 			return err
 		}
-		return db.Model(&models.Order{}).Where(
-			"number = ?", order.Number,
-		).Updates(
-			models.Order{Status: order.Status, Accrual: order.Accrual},
-		).Error
+		// transaction start
+		return db.Transaction(
+			func(tx *gorm.DB) error {
+				if err := tx.Model(&models.Order{}).Where(
+					"number = ?", order.Number,
+				).Updates(
+					models.Order{Status: order.Status, Accrual: order.Accrual},
+				).Error; err != nil {
+					return err
+				}
+				if order.Accrual > 0 {
+					if err = tx.Model(&models.Account{}).Where(
+						"user_id = (?)",
+						tx.Model(&models.Order{}).Select("id").Where(
+							"number = ?", order.Number,
+						),
+					).UpdateColumn(
+						"balance",
+						gorm.Expr("balance + ?", order.Accrual),
+					).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		)
+		// transaction end
 	}
 }
