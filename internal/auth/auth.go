@@ -39,7 +39,7 @@ func GetToken(ctx context.Context, db *sql.DB, user models.User) (string, error)
 		return "", err
 	}
 	if dbUser.Password != user.Password {
-		return "", fmt.Errorf("Wrong password")
+		return "", dbstorage.ErrInvalidLoginPassword
 	}
 	token := jwt.NewWithClaims(
 		jwt.SigningMethodHS256,

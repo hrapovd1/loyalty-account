@@ -58,10 +58,17 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Println(user)
+
+	if user.Login == "" || user.Password == "" {
+		http.Error(rw, "wrong body format", http.StatusBadRequest)
+		return
+	}
 
 	if err := auth.CreateUser(ctx, app.DB, user); err != nil {
-		// TODO: analyze error to different response
+		if err == dbstorage.ErrUserAlreadyExists {
+			http.Error(rw, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -91,16 +98,23 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.Login == "" || user.Password == "" {
+		http.Error(rw, "wrong body format", http.StatusBadRequest)
+		return
+	}
+
 	token, err := auth.GetToken(ctx, app.DB, user)
 	if err != nil {
-		// TODO: analyze error to different response
+		if err == dbstorage.ErrInvalidLoginPassword {
+			http.Error(rw, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := json.Marshal(types.LoginResponse{Auth_token: token})
 	if err != nil {
-		// TODO: analyze error to different response
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}

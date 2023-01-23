@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/hrapovd1/loyalty-account/internal/models"
 	"github.com/hrapovd1/loyalty-account/internal/types"
@@ -34,14 +33,16 @@ func CreateUser(ctx context.Context, pdb *sql.DB, user models.User) error {
 		if err != nil {
 			return err
 		}
-		log.Println(user)
-
-		err = db.Create(&user).Error
-		if err != nil {
-			return err
+		var exists bool
+		db.Model(&models.User{}).
+			Select("count(*) > 0").
+			Where("login = ?", user.Login).
+			Find(&exists)
+		if exists {
+			return ErrUserAlreadyExists
 		}
-		// Bonus for new user :)
-		return IncreaceBalance(ctx, pdb, user.Login, float64(500))
+
+		return db.Create(&user).Error
 	}
 }
 
