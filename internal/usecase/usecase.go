@@ -91,3 +91,33 @@ func Dispatcher(ctx context.Context, pdb *sql.DB, logger *log.Logger, accrualAdd
 		}
 	}
 }
+
+func OrdersTimeFormat(orders []models.Order) *[]types.OrderResponse {
+	orderResp := make([]types.OrderResponse, 0)
+	for _, order := range orders {
+		resp := types.OrderResponse{
+			Number:     order.Number,
+			Status:     order.Status,
+			UploadedAt: time.Unix(order.UploadedAt, 0).Format(time.RFC3339),
+		}
+		if order.Accrual > 0 {
+			resp.Accrual = order.Accrual
+		}
+		orderResp = append(orderResp, resp)
+	}
+
+	return &orderResp
+}
+
+func OrderLogsTimeFormat(orders []models.OrderLog) *[]types.OrderLogResponse {
+	orderLogResp := make([]types.OrderLogResponse, 0)
+	for _, order := range orders {
+		orderLogResp = append(orderLogResp, types.OrderLogResponse{
+			OrderNumber: order.OrderNumber,
+			Sum:         order.Sum,
+			ProcessedAt: time.Unix(order.ProcessedAt, 0).Format(time.RFC3339),
+		})
+	}
+
+	return &orderLogResp
+}

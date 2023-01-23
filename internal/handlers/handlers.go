@@ -130,7 +130,7 @@ func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(orders)
+	resp, err := json.Marshal(usecase.OrdersTimeFormat(*orders))
 	if err != nil {
 		// TODO: analyze error to different response
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -265,7 +265,7 @@ func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(orderLogs)
+	resp, err := json.Marshal(usecase.OrderLogsTimeFormat(*orderLogs))
 	if err != nil {
 		// TODO: analyze error to different response
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
