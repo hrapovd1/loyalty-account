@@ -77,6 +77,9 @@ func GetOrders(ctx context.Context, pdb *sql.DB, login string) (*[]models.Order,
 		}
 
 		db.Where("user_id = ?", user.ID).Find(&orders)
+		if len(orders) == 0 {
+			return &orders, ErrNoOrders
+		}
 		return &orders, err
 	}
 }
@@ -96,8 +99,17 @@ func CreateOrder(ctx context.Context, pdb *sql.DB, login string, order models.Or
 			return err
 		}
 
-		result := db.Create(&order)
-		return result.Error
+		var dbOrder models.Order
+		db.Where("number = ?", order.Number).Find(&dbOrder)
+		if dbOrder.Number != "" {
+			if dbOrder.UserID == user.ID {
+				return ErrOrderExists
+			} else {
+				return ErrOrderExistsAnother
+			}
+		}
+		return db.Create(&order).Error
+
 	}
 }
 
@@ -140,6 +152,9 @@ func GetOrderLogs(ctx context.Context, pdb *sql.DB, login string) (*[]models.Ord
 		}
 
 		err = db.Where("user_id = ?", user.ID).Find(&orders).Error
+		if len(orders) == 0 {
+			return &orders, ErrNoOrders
+		}
 		return &orders, err
 	}
 }
@@ -169,7 +184,7 @@ func WithdrawOrder(ctx context.Context, pdb *sql.DB, login string, orderLog mode
 					return err
 				}
 				if balance.Balance.Float64 < orderLog.Sum {
-					return fmt.Errorf("not enough funds")
+					return ErrNotEnoughFunds
 				}
 				// balance - sum
 				if err = tx.Model(&models.Account{}).Where(

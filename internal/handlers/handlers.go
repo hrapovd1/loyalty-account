@@ -139,19 +139,20 @@ func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 
 	orders, err := dbstorage.GetOrders(ctx, app.DB, login[0])
 	if err != nil {
-		// TODO: analyze error to different response
+		if err == dbstorage.ErrNoOrders {
+			http.Error(rw, err.Error(), http.StatusNoContent)
+			return
+		}
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := json.Marshal(usecase.OrdersTimeFormat(*orders))
 	if err != nil {
-		// TODO: analyze error to different response
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// TODO different codes for empty.
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write(resp)
 	if err != nil {
@@ -171,17 +172,30 @@ func (app *AppHandler) PostOrders(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	bodyStr := string(body)
 
-	login, ok := r.Header["Login"]
-	if !ok {
-		http.Error(rw, "login not found", http.StatusInternalServerError)
+	login := r.Header.Get("Login")
+
+	contentType := r.Header.Get("Content-type")
+	if contentType != "text/plain" || bodyStr == "" {
+		http.Error(rw, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	// TODO: orderNumber validator
+	if !usecase.IsOrderNumValid(bodyStr) {
+		http.Error(rw, "Order number is not valid", http.StatusUnprocessableEntity)
+		return
+	}
 
-	if err := usecase.SaveOrder(ctx, app.DB, login[0], string(body)); err != nil {
-		// TODO: return and answer different errors.
+	if err := usecase.SaveOrder(ctx, app.DB, login, bodyStr); err != nil {
+		if err == dbstorage.ErrOrderExists {
+			http.Error(rw, "Order exists", http.StatusOK)
+			return
+		}
+		if err == dbstorage.ErrOrderExistsAnother {
+			http.Error(rw, "Order exists", http.StatusConflict)
+			return
+		}
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -228,11 +242,7 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	login, ok := r.Header["Login"]
-	if !ok {
-		http.Error(rw, "login not found", http.StatusInternalServerError)
-		return
-	}
+	login := r.Header.Get("Login")
 
 	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -247,8 +257,16 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = dbstorage.WithdrawOrder(ctx, app.DB, login[0], orderLog); err != nil {
-		// TODO: return and answer different errors.
+	if !usecase.IsOrderNumValid(orderLog.OrderNumber) {
+		http.Error(rw, "Order number is not valid", http.StatusUnprocessableEntity)
+		return
+	}
+
+	if err = dbstorage.WithdrawOrder(ctx, app.DB, login, orderLog); err != nil {
+		if err == dbstorage.ErrNotEnoughFunds {
+			http.Error(rw, err.Error(), http.StatusPaymentRequired)
+			return
+		}
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -274,7 +292,10 @@ func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 
 	orderLogs, err := dbstorage.GetOrderLogs(ctx, app.DB, login[0])
 	if err != nil {
-		// TODO: analyze error to different response
+		if err == dbstorage.ErrNoOrders {
+			http.Error(rw, err.Error(), http.StatusNoContent)
+			return
+		}
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}

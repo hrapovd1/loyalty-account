@@ -3,7 +3,6 @@ package handlers
 import (
 	"compress/gzip"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -52,7 +51,6 @@ func Authenticator(next http.Handler) http.Handler {
 			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		log.Printf("authParam: %+v", strings.Split(authParam[0], " ")[1])
 
 		// Check token to valid
 		login, err := auth.CheckToken(strings.Split(authParam[0], " ")[1])
