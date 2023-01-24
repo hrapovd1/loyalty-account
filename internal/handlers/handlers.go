@@ -73,7 +73,17 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rw.Header().Set("Authorization", "Token")
+	token, err := auth.GetToken(ctx, app.DB, user)
+	if err != nil {
+		if err == dbstorage.ErrInvalidLoginPassword {
+			http.Error(rw, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rw.Header().Set("Authorization", token)
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write([]byte(""))
 	if err != nil {
