@@ -73,6 +73,7 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rw.Header().Set("Authorization", "Token")
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write([]byte(""))
 	if err != nil {
@@ -119,6 +120,7 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rw.Header().Set("Authorization", "Token "+token)
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write(resp)
 	if err != nil {
