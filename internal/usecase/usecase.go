@@ -58,7 +58,7 @@ func Dispatcher(ctx context.Context, pdb *sql.DB, logger *log.Logger, accrualAdd
 			}
 			logger.Printf("Dispatcher, orderNums = %+v, type = %T", orderNumbers, orderNumbers)
 			for _, order := range *orderNumbers {
-				resp, err := client.R().Get(fmt.Sprintf("http://%v/api/orders/%v", accrualAddress, order))
+				resp, err := client.R().Get(fmt.Sprintf("%v/api/orders/%v", accrualAddress, order))
 				if err != nil {
 					logger.Print(err)
 					continue
