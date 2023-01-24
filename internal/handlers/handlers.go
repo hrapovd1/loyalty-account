@@ -310,15 +310,12 @@ func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Withdrawals, before marshal: %+v", orderLogs)
 
 	resp, err := json.Marshal(usecase.OrderLogsTimeFormat(*orderLogs))
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	log.Printf("Withdrawals, after marshal: %+v", resp)
 
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
