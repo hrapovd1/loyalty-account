@@ -14,7 +14,7 @@ type Claims struct {
 }
 
 type LoginResponse struct {
-	Auth_token string `json:"auth_token"`
+	Authtoken string `json:"auth_token"`
 }
 
 type OrderResponse struct {

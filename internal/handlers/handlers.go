@@ -113,7 +113,7 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(types.LoginResponse{Auth_token: token})
+	resp, err := json.Marshal(types.LoginResponse{Authtoken: token})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -223,14 +223,14 @@ func (app *AppHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resultJson, err := json.Marshal(result)
+	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rw.WriteHeader(http.StatusOK)
-	_, err = rw.Write(resultJson)
+	_, err = rw.Write(resultJSON)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
