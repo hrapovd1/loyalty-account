@@ -46,23 +46,12 @@ func GzipMiddle(next http.Handler) http.Handler {
 func Authenticator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		// Get access token from request
-		authParam, ok := r.Header["Authorization"]
-		if !ok {
-			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
+		authParam := r.Header.Get("Authorization")
 
 		// Check token to valid
-		token := strings.Split(authParam[0], " ")
-		if len(token) < 2 {
-			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
-
-		// Allow or prohibit access
-		login, err := auth.CheckToken(token[1])
+		login, err := auth.CheckToken(authParam)
 		if err != nil {
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			http.Error(rw, err.Error(), http.StatusUnauthorized)
 			return
 		}
 

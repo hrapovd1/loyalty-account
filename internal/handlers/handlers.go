@@ -120,7 +120,7 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rw.Header().Set("Authorization", "Token "+token)
+	rw.Header().Set("Authorization", token)
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write(resp)
 	if err != nil {

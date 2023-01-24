@@ -73,5 +73,5 @@ func CheckToken(accessToken string) (string, error) {
 		return claims.Login, nil
 	}
 
-	return "", fmt.Errorf("token wrong")
+	return "", ErrTokenWrong
 }
