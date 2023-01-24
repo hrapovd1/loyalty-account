@@ -149,6 +149,8 @@ func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rw.Header().Set("Content-Type", "application/json")
+
 	orders, err := dbstorage.GetOrders(ctx, app.DB, login[0])
 	if err != nil {
 		if err == dbstorage.ErrNoOrders {
@@ -241,6 +243,7 @@ func (app *AppHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write(resultJSON)
 	if err != nil {
