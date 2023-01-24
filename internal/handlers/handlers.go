@@ -299,13 +299,9 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	login, ok := r.Header["Login"]
-	if !ok {
-		http.Error(rw, "login not found", http.StatusInternalServerError)
-		return
-	}
+	login := r.Header.Get("Login")
 
-	orderLogs, err := dbstorage.GetOrderLogs(ctx, app.DB, login[0])
+	orderLogs, err := dbstorage.GetOrderLogs(ctx, app.DB, login)
 	if err != nil {
 		if err == dbstorage.ErrNoOrders {
 			http.Error(rw, err.Error(), http.StatusNoContent)
@@ -314,15 +310,17 @@ func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("Withdrawals, before marshal: %+v", orderLogs)
 
 	resp, err := json.Marshal(usecase.OrderLogsTimeFormat(*orderLogs))
 	if err != nil {
-		// TODO: analyze error to different response
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// TODO different codes for empty.
+	log.Printf("Withdrawals, after marshal: %+v", resp)
+
+	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	_, err = rw.Write(resp)
 	if err != nil {
