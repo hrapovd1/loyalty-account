@@ -53,17 +53,19 @@ func Authenticator(next http.Handler) http.Handler {
 		}
 
 		// Check token to valid
-		login, err := auth.CheckToken(strings.Split(authParam[0], " ")[1])
+		token := strings.Split(authParam[0], " ")
+		if len(token) < 2 {
+			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		// Allow or prohibit access
+		login, err := auth.CheckToken(token[1])
 		if err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Allow or prohibit access
-		if login == "" {
-			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
 		r.Header["Login"] = []string{login}
 
 		// Token is authenticated, pass it through
