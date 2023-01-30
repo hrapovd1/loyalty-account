@@ -11,8 +11,21 @@ import (
 	"gorm.io/gorm"
 )
 
-func InitDB(pdb *sql.DB) error {
-	db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+type DBStorage struct {
+	DB *sql.DB
+}
+
+func NewDB(dsn string) (DBStorage, error) {
+	dbConnect, err := sql.Open("pgx", dsn)
+	return DBStorage{DB: dbConnect}, err
+}
+
+func (ds *DBStorage) Close() {
+	ds.DB.Close()
+}
+
+func (ds *DBStorage) InitDB() error {
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 	if err != nil {
 		return err
 	}
@@ -24,12 +37,12 @@ func InitDB(pdb *sql.DB) error {
 	)
 }
 
-func CreateUser(ctx context.Context, pdb *sql.DB, user models.User) error {
+func (ds *DBStorage) CreateUser(ctx context.Context, user models.User) error {
 	select {
 	case <-ctx.Done():
 		return nil
 	default:
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return err
 		}
@@ -46,13 +59,13 @@ func CreateUser(ctx context.Context, pdb *sql.DB, user models.User) error {
 	}
 }
 
-func GetUser(ctx context.Context, pdb *sql.DB, login string) (*models.User, error) {
+func (ds *DBStorage) GetUser(ctx context.Context, login string) (*models.User, error) {
 	var user models.User
 	select {
 	case <-ctx.Done():
 		return &user, nil
 	default:
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return &user, err
 		}
@@ -61,17 +74,17 @@ func GetUser(ctx context.Context, pdb *sql.DB, login string) (*models.User, erro
 	}
 }
 
-func GetOrders(ctx context.Context, pdb *sql.DB, login string) (*[]models.Order, error) {
+func (ds *DBStorage) GetOrders(ctx context.Context, login string) (*[]models.Order, error) {
 	orders := make([]models.Order, 0)
 	select {
 	case <-ctx.Done():
 		return &orders, nil
 	default:
-		user, err := GetUser(ctx, pdb, login)
+		user, err := ds.GetUser(ctx, login)
 		if err != nil {
 			return &orders, err
 		}
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return &orders, err
 		}
@@ -84,17 +97,17 @@ func GetOrders(ctx context.Context, pdb *sql.DB, login string) (*[]models.Order,
 	}
 }
 
-func CreateOrder(ctx context.Context, pdb *sql.DB, login string, order models.Order) error {
+func (ds *DBStorage) CreateOrder(ctx context.Context, login string, order models.Order) error {
 	select {
 	case <-ctx.Done():
 		return nil
 	default:
-		user, err := GetUser(ctx, pdb, login)
+		user, err := ds.GetUser(ctx, login)
 		if err != nil {
 			return err
 		}
 		order.UserID = user.ID
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return err
 		}
@@ -113,14 +126,14 @@ func CreateOrder(ctx context.Context, pdb *sql.DB, login string, order models.Or
 	}
 }
 
-func GetBalance(ctx context.Context, pdb *sql.DB, login string) (*types.Balance, error) {
+func (ds *DBStorage) GetBalance(ctx context.Context, login string) (*types.Balance, error) {
 	var result types.Balance
 
 	select {
 	case <-ctx.Done():
 		return &result, nil
 	default:
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return &result, err
 		}
@@ -136,17 +149,17 @@ func GetBalance(ctx context.Context, pdb *sql.DB, login string) (*types.Balance,
 	}
 }
 
-func GetOrderLogs(ctx context.Context, pdb *sql.DB, login string) (*[]models.OrderLog, error) {
+func (ds *DBStorage) GetOrderLogs(ctx context.Context, login string) (*[]models.OrderLog, error) {
 	orders := make([]models.OrderLog, 0)
 	select {
 	case <-ctx.Done():
 		return &orders, nil
 	default:
-		user, err := GetUser(ctx, pdb, login)
+		user, err := ds.GetUser(ctx, login)
 		if err != nil {
 			return &orders, err
 		}
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return &orders, err
 		}
@@ -159,7 +172,7 @@ func GetOrderLogs(ctx context.Context, pdb *sql.DB, login string) (*[]models.Ord
 	}
 }
 
-func WithdrawOrder(ctx context.Context, pdb *sql.DB, login string, orderLog models.OrderLog) error {
+func (ds *DBStorage) WithdrawOrder(ctx context.Context, login string, orderLog models.OrderLog) error {
 	select {
 	case <-ctx.Done():
 		return nil
@@ -167,7 +180,7 @@ func WithdrawOrder(ctx context.Context, pdb *sql.DB, login string, orderLog mode
 		if orderLog.Sum <= 0 {
 			return fmt.Errorf("sum must be >0")
 		}
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return err
 		}
@@ -201,7 +214,7 @@ func WithdrawOrder(ctx context.Context, pdb *sql.DB, login string, orderLog mode
 	}
 }
 
-func IncreaceBalance(ctx context.Context, pdb *sql.DB, login string, sum float64) error {
+func (ds *DBStorage) IncreaceBalance(ctx context.Context, login string, sum float64) error {
 	select {
 	case <-ctx.Done():
 		return nil
@@ -209,7 +222,7 @@ func IncreaceBalance(ctx context.Context, pdb *sql.DB, login string, sum float64
 		if sum <= 0 {
 			return fmt.Errorf("sum must be >0")
 		}
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return err
 		}
@@ -223,13 +236,13 @@ func IncreaceBalance(ctx context.Context, pdb *sql.DB, login string, sum float64
 	}
 }
 
-func DispatchGetOrders(ctx context.Context, pdb *sql.DB, status string) (*[]string, error) {
+func (ds *DBStorage) DispatchGetOrders(ctx context.Context, status string) (*[]string, error) {
 	numList := make([]string, 0)
 	select {
 	case <-ctx.Done():
 		return &numList, nil
 	default:
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return &numList, err
 		}
@@ -253,12 +266,12 @@ func DispatchGetOrders(ctx context.Context, pdb *sql.DB, status string) (*[]stri
 	}
 }
 
-func DispatchUpdateOrder(ctx context.Context, pdb *sql.DB, order models.Order) error {
+func (ds *DBStorage) DispatchUpdateOrder(ctx context.Context, order models.Order) error {
 	select {
 	case <-ctx.Done():
 		return nil
 	default:
-		db, err := gorm.Open(postgres.New(postgres.Config{Conn: pdb}), &gorm.Config{})
+		db, err := gorm.Open(postgres.New(postgres.Config{Conn: ds.DB}), &gorm.Config{})
 		if err != nil {
 			return err
 		}

@@ -2,12 +2,6 @@ package types
 
 import "github.com/golang-jwt/jwt/v4"
 
-type Config struct {
-	AppAddress     string
-	DatabaseDSN    string
-	AccrualAddress string
-}
-
 type Claims struct {
 	Login string `json:"login"`
 	jwt.RegisteredClaims

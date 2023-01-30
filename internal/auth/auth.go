@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/sha1"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -20,21 +19,21 @@ const (
 	signingKey     = "r'tyJFSdf384SLD.jsdf"
 )
 
-func CreateUser(ctx context.Context, db *sql.DB, user models.User) error {
+func CreateUser(ctx context.Context, storage *dbstorage.DBStorage, user models.User) error {
 	pwdHash := sha1.New()
 	pwdHash.Write([]byte(user.Password))
 	pwdHash.Write([]byte(hashSalt))
 	user.Password = fmt.Sprintf("%x", pwdHash.Sum(nil))
 
-	return dbstorage.CreateUser(ctx, db, user)
+	return storage.CreateUser(ctx, user)
 }
 
-func GetToken(ctx context.Context, db *sql.DB, user models.User) (string, error) {
+func GetToken(ctx context.Context, storage *dbstorage.DBStorage, user models.User) (string, error) {
 	pwdHash := sha1.New()
 	pwdHash.Write([]byte(user.Password))
 	pwdHash.Write([]byte(hashSalt))
 	user.Password = fmt.Sprintf("%x", pwdHash.Sum(nil))
-	dbUser, err := dbstorage.GetUser(ctx, db, user.Login)
+	dbUser, err := storage.GetUser(ctx, user.Login)
 	if err != nil {
 		return "", err
 	}

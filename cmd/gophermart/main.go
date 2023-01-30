@@ -8,9 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hrapovd1/loyalty-account/internal/config"
-	"github.com/hrapovd1/loyalty-account/internal/dbstorage"
+	"github.com/hrapovd1/loyalty-account/internal/dispatcher"
 	"github.com/hrapovd1/loyalty-account/internal/handlers"
-	"github.com/hrapovd1/loyalty-account/internal/usecase"
 )
 
 func main() {
@@ -27,8 +26,9 @@ func main() {
 	if err != nil {
 		logger.Fatalln(err)
 	}
-	defer app.DB.Close()
-	if err := dbstorage.InitDB(app.DB); err != nil {
+	defer app.Storage.Close()
+
+	if err := app.Storage.InitDB(); err != nil {
 		logger.Fatalln(err)
 	}
 
@@ -36,7 +36,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go usecase.Dispatcher(ctx, app.DB, logger, appConf.AccrualAddress)
+	go dispatcher.Dispatcher(ctx, app.Storage, logger, appConf.AccrualAddress)
 
 	// Публикация API
 	router := chi.NewRouter()

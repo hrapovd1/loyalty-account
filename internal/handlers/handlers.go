@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -18,7 +17,7 @@ import (
 
 type AppHandler struct {
 	AccrualAddress string
-	DB             *sql.DB
+	Storage        *dbstorage.DBStorage
 	Logger         *log.Logger
 }
 
@@ -28,19 +27,17 @@ func NewAppHandler(conf config.Config, logger *log.Logger) (*AppHandler, error) 
 		AccrualAddress: conf.AccrualAddress,
 		Logger:         logger,
 	}
-	dbConnect, err := sql.Open("pgx", conf.DatabaseDSN)
+	storage, err := dbstorage.NewDB(conf.DatabaseDSN)
 	if err != nil {
 		return app, err
 	}
-	app.DB = dbConnect
+	app.Storage = &storage
 
 	return app, nil
 }
 
-// Register POST handler use to register new users.
+// Register POST handler is used to register new users.
 func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -64,7 +61,7 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.CreateUser(ctx, app.DB, user); err != nil {
+	if err := auth.CreateUser(r.Context(), app.Storage, user); err != nil {
 		if err == dbstorage.ErrUserAlreadyExists {
 			http.Error(rw, err.Error(), http.StatusConflict)
 			return
@@ -73,7 +70,7 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GetToken(ctx, app.DB, user)
+	token, err := auth.GetToken(r.Context(), app.Storage, user)
 	if err != nil {
 		if err == dbstorage.ErrInvalidLoginPassword {
 			http.Error(rw, err.Error(), http.StatusUnauthorized)
@@ -92,10 +89,8 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Login POST handler use to get auth token.
+// Login POST handler is used to get auth token.
 func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -114,7 +109,7 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GetToken(ctx, app.DB, user)
+	token, err := auth.GetToken(r.Context(), app.Storage, user)
 	if err != nil {
 		if err == dbstorage.ErrInvalidLoginPassword {
 			http.Error(rw, err.Error(), http.StatusUnauthorized)
@@ -141,17 +136,11 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 
 // GetOrders handler return list of put orders.
 func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	login, ok := r.Header["Login"]
-	if !ok {
-		http.Error(rw, "login not found", http.StatusInternalServerError)
-		return
-	}
+	login := r.Header.Get("Login")
 
 	rw.Header().Set("Content-Type", "application/json")
 
-	orders, err := dbstorage.GetOrders(ctx, app.DB, login[0])
+	orders, err := app.Storage.GetOrders(r.Context(), login)
 	if err != nil {
 		if err == dbstorage.ErrNoOrders {
 			http.Error(rw, err.Error(), http.StatusNoContent)
@@ -178,8 +167,6 @@ func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 
 // PostOrders handler put new order.
 func (app *AppHandler) PostOrders(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -201,7 +188,7 @@ func (app *AppHandler) PostOrders(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := usecase.SaveOrder(ctx, app.DB, login, bodyStr); err != nil {
+	if err := usecase.SaveOrder(r.Context(), app.Storage, login, bodyStr); err != nil {
 		if err == dbstorage.ErrOrderExists {
 			http.Error(rw, "Order exists", http.StatusOK)
 			return
@@ -223,15 +210,9 @@ func (app *AppHandler) PostOrders(rw http.ResponseWriter, r *http.Request) {
 
 // GetBalance handler return user accrual balance.
 func (app *AppHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	login, ok := r.Header["Login"]
-	if !ok {
-		http.Error(rw, "login not found", http.StatusInternalServerError)
-		return
-	}
+	login := r.Header.Get("Login")
 
-	result, err := dbstorage.GetBalance(ctx, app.DB, login[0])
+	result, err := app.Storage.GetBalance(r.Context(), login)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -254,9 +235,6 @@ func (app *AppHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
 
 // Withdraw POST handler withdraw accrual to pay order.
 func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
 	login := r.Header.Get("Login")
 
 	body, err := io.ReadAll(r.Body)
@@ -277,7 +255,7 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = dbstorage.WithdrawOrder(ctx, app.DB, login, orderLog); err != nil {
+	if err = app.Storage.WithdrawOrder(r.Context(), login, orderLog); err != nil {
 		if err == dbstorage.ErrNotEnoughFunds {
 			http.Error(rw, err.Error(), http.StatusPaymentRequired)
 			return
@@ -297,11 +275,9 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 
 // Withdrawals GET handler return list of payment with accrual.
 func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 	login := r.Header.Get("Login")
 
-	orderLogs, err := dbstorage.GetOrderLogs(ctx, app.DB, login)
+	orderLogs, err := app.Storage.GetOrderLogs(r.Context(), login)
 	if err != nil {
 		if err == dbstorage.ErrNoOrders {
 			http.Error(rw, err.Error(), http.StatusNoContent)
