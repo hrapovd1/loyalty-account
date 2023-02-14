@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/hrapovd1/loyalty-account/internal/config"
 	"github.com/hrapovd1/loyalty-account/internal/dispatcher"
 	"github.com/hrapovd1/loyalty-account/internal/handlers"
@@ -36,29 +35,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go dispatcher.Dispatcher(ctx, app.Storage, logger, appConf.AccrualAddress)
+	dsptchr := dispatcher.Dispatcher{
+		Storage:        app.Storage,
+		Logger:         logger,
+		AccrualAddress: appConf.AccrualAddress,
+	}
 
-	// Публикация API
-	router := chi.NewRouter()
-	router.Use(handlers.GzipMiddle)
+	go dsptchr.Run(ctx)
 
-	// Публично доступные маршруты.
-	router.Group(
-		func(r chi.Router) {
-			r.Post("/api/user/register", app.Register)
-			r.Post("/api/user/login", app.Login)
-		})
-
-	// Маршруты для аутентифицированных пользователей.
-	router.Group(func(r chi.Router) {
-		r.Use(handlers.Authenticator)
-		r.Get("/api/user/orders", app.GetOrders)
-		r.Post("/api/user/orders", app.PostOrders)
-		r.Get("/api/user/balance", app.GetBalance)
-		r.Post("/api/user/balance/withdraw", app.Withdraw)
-		r.Get("/api/user/withdrawals", app.Withdrawals)
-	})
-
+	// Открытие порта и обслуживание API запросов
+	router := handlers.NewRouter(app)
 	logger.Println("App is waiting connections on: ", appConf.AppAddress)
 	logger.Fatal(http.ListenAndServe(appConf.AppAddress, router))
 }

@@ -2,10 +2,9 @@ package dispatcher
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -17,67 +16,79 @@ import (
 const (
 	statNew        = "NEW"
 	statProcessing = "PROCESSING"
-	checkPause     = 5 // seconds
-	empty          = 0
+	checkPause     = 5 * time.Second
 )
 
-func Dispatcher(ctx context.Context, storage *dbstorage.DBStorage, logger *log.Logger, accrualAddress string) {
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		answer := types.AccrualAnswer{}
-		checkNew := true
-		client := resty.New()
-		for {
-			var status string
-			if checkNew {
-				status = statNew
-			} else {
-				status = statProcessing
-			}
-			orderNumbers, err := storage.DispatchGetOrders(ctx, status)
+type Dispatcher struct {
+	Storage        *dbstorage.DBStorage
+	Logger         *log.Logger
+	AccrualAddress string
+}
+
+func (disp Dispatcher) Run(ctx context.Context) {
+	answer := types.AccrualAnswer{}
+	checkNew := true
+	client := resty.New()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		clientCTX, cltCancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cltCancel()
+		dbCTX, dbCancel := context.WithTimeout(ctx, time.Second)
+		defer dbCancel()
+
+		var status string
+		if checkNew {
+			status = statNew
+		} else {
+			status = statProcessing
+		}
+		orderNumbers, err := disp.Storage.DispatchGetOrders(dbCTX, status)
+		if err != nil {
+			disp.Logger.Print(err)
+		}
+
+		if len(orderNumbers) == 0 {
+			checkNew = !checkNew
+			time.Sleep(checkPause)
+			continue
+		}
+		disp.Logger.Printf("Dispatcher, orderNums = %+v, type = %T", orderNumbers, orderNumbers)
+		for _, order := range orderNumbers {
+			resp, err := client.R().
+				SetContext(clientCTX).
+				SetResult(&answer).
+				Get(path.Join(disp.AccrualAddress, "api/orders", order))
 			if err != nil {
-				logger.Print(err)
-			}
-			if len(*orderNumbers) == empty {
-				checkNew = !checkNew
-				time.Sleep(time.Second * checkPause)
+				disp.Logger.Print(err)
 				continue
 			}
-			logger.Printf("Dispatcher, orderNums = %+v, type = %T", orderNumbers, orderNumbers)
-			for _, order := range *orderNumbers {
-				resp, err := client.R().Get(fmt.Sprintf("%v/api/orders/%v", accrualAddress, order))
-				if err != nil {
-					logger.Print(err)
-					continue
-				}
-				if err = json.Unmarshal(resp.Body(), &answer); err != nil {
-					logger.Print(err)
-				}
-				if resp.StatusCode() != http.StatusOK {
-					logger.Printf("For order number = %v, accrual system returned status: %v", order, resp.StatusCode())
-					logger.Printf("Answer = '%+v'", resp.String())
-					continue
-				}
-				switch answer.Status {
-				case "INVALID", "PROCESSED":
-					if err = storage.DispatchUpdateOrder(
-						ctx,
-						models.Order{
-							Number:  answer.OrderNumber,
-							Status:  answer.Status,
-							Accrual: answer.Accrual,
-						},
-					); err != nil {
-						logger.Print(err)
-						continue
-					}
-				case "REGISTERED", "PROCESSING":
-					continue
-				}
+			if resp.StatusCode() != http.StatusOK {
+				disp.Logger.Printf("For order number = %v, accrual system returned status: %v", order, resp.StatusCode())
+				disp.Logger.Printf("Answer = '%+v'", resp.String())
+				continue
 			}
-			checkNew = !checkNew
+			switch answer.Status {
+			case "INVALID", "PROCESSED":
+				if err = disp.Storage.DispatchUpdateOrder(
+					dbCTX,
+					models.Order{
+						Number:  answer.OrderNumber,
+						Status:  answer.Status,
+						Accrual: answer.Accrual,
+					},
+				); err != nil {
+					disp.Logger.Print(err)
+					continue
+				}
+			case "REGISTERED", "PROCESSING":
+				continue
+			}
 		}
+		checkNew = !checkNew
 	}
 }

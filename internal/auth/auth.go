@@ -15,7 +15,7 @@ import (
 
 const (
 	hashSalt       = "sd!oJFDw4-3409sdf."
-	expireDuration = 30 // minutes
+	expireDuration = 30 * time.Minute
 	signingKey     = "r'tyJFSdf384SLD.jsdf"
 )
 
@@ -45,7 +45,7 @@ func GetToken(ctx context.Context, storage *dbstorage.DBStorage, user models.Use
 		&types.Claims{
 			Login: user.Login,
 			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireDuration * time.Minute)),
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireDuration)),
 				IssuedAt:  jwt.NewNumericDate(time.Now()),
 			},
 		})

@@ -26,7 +26,7 @@ func SaveOrder(ctx context.Context, storage *dbstorage.DBStorage, login string, 
 	}
 }
 
-func OrdersTimeFormat(orders []models.Order) *[]types.OrderResponse {
+func OrdersTimeFormat(orders []models.Order) []types.OrderResponse {
 	orderResp := make([]types.OrderResponse, 0)
 	for _, order := range orders {
 		resp := types.OrderResponse{
@@ -40,10 +40,10 @@ func OrdersTimeFormat(orders []models.Order) *[]types.OrderResponse {
 		orderResp = append(orderResp, resp)
 	}
 
-	return &orderResp
+	return orderResp
 }
 
-func OrderLogsTimeFormat(orders []models.OrderLog) *[]types.OrderLogResponse {
+func OrderLogsTimeFormat(orders []models.OrderLog) []types.OrderLogResponse {
 	orderLogResp := make([]types.OrderLogResponse, 0)
 	for _, order := range orders {
 		orderLogResp = append(orderLogResp, types.OrderLogResponse{
@@ -53,7 +53,7 @@ func OrderLogsTimeFormat(orders []models.OrderLog) *[]types.OrderLogResponse {
 		})
 	}
 
-	return &orderLogResp
+	return orderLogResp
 }
 
 // Func check number according Luhn algorithm

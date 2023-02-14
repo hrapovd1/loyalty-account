@@ -3,10 +3,12 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/hrapovd1/loyalty-account/internal/auth"
 	"github.com/hrapovd1/loyalty-account/internal/config"
 	"github.com/hrapovd1/loyalty-account/internal/dbstorage"
@@ -36,6 +38,32 @@ func NewAppHandler(conf config.Config, logger *log.Logger) (*AppHandler, error) 
 	return app, nil
 }
 
+// NewRouter return ready chi router with configured API urls.
+func NewRouter(app *AppHandler) *chi.Mux {
+	// Публикация API
+	router := chi.NewRouter()
+	router.Use(GzipMiddle)
+
+	// Публично доступные маршруты.
+	router.Group(
+		func(r chi.Router) {
+			r.Post("/api/user/register", app.Register)
+			r.Post("/api/user/login", app.Login)
+		})
+
+	// Маршруты для аутентифицированных пользователей.
+	router.Group(func(r chi.Router) {
+		r.Use(Authenticator)
+		r.Get("/api/user/orders", app.GetOrders)
+		r.Post("/api/user/orders", app.PostOrders)
+		r.Get("/api/user/balance", app.GetBalance)
+		r.Post("/api/user/balance/withdraw", app.Withdraw)
+		r.Get("/api/user/withdrawals", app.Withdrawals)
+	})
+
+	return router
+}
+
 // Register POST handler is used to register new users.
 func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
@@ -62,7 +90,7 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := auth.CreateUser(r.Context(), app.Storage, user); err != nil {
-		if err == dbstorage.ErrUserAlreadyExists {
+		if errors.Is(err, dbstorage.ErrUserAlreadyExists) {
 			http.Error(rw, err.Error(), http.StatusConflict)
 			return
 		}
@@ -72,7 +100,7 @@ func (app *AppHandler) Register(rw http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.GetToken(r.Context(), app.Storage, user)
 	if err != nil {
-		if err == dbstorage.ErrInvalidLoginPassword {
+		if errors.Is(err, dbstorage.ErrInvalidLoginPassword) {
 			http.Error(rw, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -111,7 +139,7 @@ func (app *AppHandler) Login(rw http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.GetToken(r.Context(), app.Storage, user)
 	if err != nil {
-		if err == dbstorage.ErrInvalidLoginPassword {
+		if errors.Is(err, dbstorage.ErrInvalidLoginPassword) {
 			http.Error(rw, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -142,7 +170,7 @@ func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 
 	orders, err := app.Storage.GetOrders(r.Context(), login)
 	if err != nil {
-		if err == dbstorage.ErrNoOrders {
+		if errors.Is(err, dbstorage.ErrNoOrders) {
 			http.Error(rw, err.Error(), http.StatusNoContent)
 			return
 		}
@@ -150,7 +178,7 @@ func (app *AppHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(usecase.OrdersTimeFormat(*orders))
+	resp, err := json.Marshal(usecase.OrdersTimeFormat(orders))
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -189,11 +217,11 @@ func (app *AppHandler) PostOrders(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := usecase.SaveOrder(r.Context(), app.Storage, login, bodyStr); err != nil {
-		if err == dbstorage.ErrOrderExists {
+		if errors.Is(err, dbstorage.ErrOrderExists) {
 			http.Error(rw, "Order exists", http.StatusOK)
 			return
 		}
-		if err == dbstorage.ErrOrderExistsAnother {
+		if errors.Is(err, dbstorage.ErrOrderExistsAnother) {
 			http.Error(rw, "Order exists", http.StatusConflict)
 			return
 		}
@@ -256,7 +284,7 @@ func (app *AppHandler) Withdraw(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = app.Storage.WithdrawOrder(r.Context(), login, orderLog); err != nil {
-		if err == dbstorage.ErrNotEnoughFunds {
+		if errors.Is(err, dbstorage.ErrNotEnoughFunds) {
 			http.Error(rw, err.Error(), http.StatusPaymentRequired)
 			return
 		}
@@ -279,7 +307,7 @@ func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 
 	orderLogs, err := app.Storage.GetOrderLogs(r.Context(), login)
 	if err != nil {
-		if err == dbstorage.ErrNoOrders {
+		if errors.Is(err, dbstorage.ErrNoOrders) {
 			http.Error(rw, err.Error(), http.StatusNoContent)
 			return
 		}
@@ -287,7 +315,7 @@ func (app *AppHandler) Withdrawals(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(usecase.OrderLogsTimeFormat(*orderLogs))
+	resp, err := json.Marshal(usecase.OrderLogsTimeFormat(orderLogs))
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
