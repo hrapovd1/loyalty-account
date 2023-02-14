@@ -46,6 +46,7 @@ jobs:
 
       - name: Prepare binaries
         run: |
+          rm -rf .git # Fix error obtaining VCS status: exit status 128
           (cd cmd/gophermart && go build -o gophermart)
           (cd cmd/accrual && chmod +x accrual_linux_amd64)
 
