@@ -2,9 +2,9 @@ package dispatcher
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
-	"path"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -62,7 +62,7 @@ func (disp Dispatcher) Run(ctx context.Context) {
 			resp, err := client.R().
 				SetContext(clientCTX).
 				SetResult(&answer).
-				Get(path.Join(disp.AccrualAddress, "api/orders", order))
+				Get(fmt.Sprint(disp.AccrualAddress, "/api/orders/", order))
 			if err != nil {
 				disp.Logger.Print(err)
 				continue
